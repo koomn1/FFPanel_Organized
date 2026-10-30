@@ -1,0 +1,51 @@
+{
+  "aim": {
+    "enabled": true,
+    "mode": "smooth",
+    "priority": "nearest",
+    "fovRadius": 300,
+    "smooth": 0.35,
+    "headOffset": 0.2,
+    "predictionMs": 35,
+    "deadZonePx": 1.0,
+    "humanize": true,
+    "recoilCompensation": false
+  },
+  "trigger": {
+    "enabled": false,
+    "radiusPx": 40,
+    "holdMs": 45,
+    "fireRateMs": 90
+  },
+  "esp": {
+    "enabled": true,
+    "box": true,
+    "snapline": true,
+    "health": true,
+    "distance": false,
+    "name": false,
+    "fovCircle": true,
+    "radar": false,
+    "targetHighlight": false,
+    "radarSize": 180,
+    "boxColor": "#00FF88",
+    "snaplineColor": "#FFFFFF",
+    "fovColor": "#00BFFF"
+  },
+  "silent": {
+    "enabled": false
+  },
+  "stealth": {
+    "randomizeNames": true,
+    "hideFromCapture": true,
+    "suppressConsole": true,
+    "panicOnDetect": false
+  },
+  "hotkeys": {
+    "toggleAim": 112,
+    "toggleTrigger": 113,
+    "toggleEsp": 114,
+    "toggleSilent": 115,
+    "panic": 35
+  }
+}

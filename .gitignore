@@ -1,0 +1,20 @@
+# build output
+/build/
+/driver/obj/
+/driver/x64/
+*.sys
+*.pdb
+*.obj
+*.ilk
+*.exp
+*.tlog
+*.lastbuildstate
+
+# fetched by setup.bat
+/third_party/
+
+# ide
+.vs/
+*.user
+*.suo
+CMakeUserPresets.json

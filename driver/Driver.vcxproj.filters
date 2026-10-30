@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{2F6B9D31-5A84-4C2E-9E77-1B3C8D4A6F20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Driver Files">
+      <UniqueIdentifier>{7D1E4A85-9C36-4B0F-A52D-8E6F3C1B9D47}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Driver.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <Inf Include="Driver.inf">
+      <Filter>Driver Files</Filter>
+    </Inf>
+    <None Include="Driver.h">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+</Project>

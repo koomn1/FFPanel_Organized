@@ -1,0 +1,18 @@
+{
+  "_readme": [
+    "Copy this file to offsets.json and fill in the four build offsets.",
+    "Every value is an RVA inside libil2cpp.so: the number you add to the",
+    "module base. 0 means 'not resolved yet' and is skipped by the loader.",
+    "offsets.json is read from the current working directory at startup:",
+    "put it next to HD-Player.exe (panel) or next to external.exe.",
+    "Get the numbers from your own Il2CppDumper run - see sdk/dump_placeholder.cs."
+  ],
+  "module": "libil2cpp.so",
+  "gameBuild": "",
+  "offsets": {
+    "OFF_PLAYERMANAGER_INSTANCE": "0x0",
+    "OFF_CAMERA_INSTANCE": "0x0",
+    "OFF_LOCALPLAYER_INSTANCE": "0x0",
+    "OFF_WEAPON_DIRECTION_FN": "0x0"
+  }
+}

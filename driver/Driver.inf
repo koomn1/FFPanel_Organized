@@ -1,0 +1,56 @@
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider=%Provider%
+CatalogFile=FFPanel.cat
+DriverVer=01/01/2024,1.0.0.0
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 12
+FFPanel.DriverFiles = 12
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+FFPanel.sys = 1,,
+
+[DefaultInstall]
+OptionDesc = %ServiceDesc%
+CopyFiles = FFPanel.DriverFiles
+
+[DefaultInstall.Services]
+AddService = %ServiceName%,,FFPanel.Service
+
+[FFPanel.DriverFiles]
+FFPanel.sys,,,0x00000010
+
+[FFPanel.Service]
+DisplayName    = %ServiceName%
+Description    = %ServiceDesc%
+ServiceBinary  = %12%\FFPanel.sys
+ServiceType    = 1
+StartType      = 3
+ErrorControl   = 1
+LoadOrderGroup = Base
+
+[Manufacturer]
+%Provider% = FFPanel,NTamd64
+
+[FFPanel.NTamd64]
+%DeviceDesc% = FFPanel_Device, root\FFPanel
+
+[FFPanel_Device.NT]
+CopyFiles = FFPanel.DriverFiles
+
+[FFPanel_Device.NT.Services]
+AddService = %ServiceName%,,FFPanel.Service
+
+[Strings]
+Provider      = "FFPanel"
+DiskName      = "FFPanel Driver"
+ServiceName   = "FFPanel"
+ServiceDesc   = "FFPanel kernel helper"
+DeviceDesc    = "FFPanel Device"
