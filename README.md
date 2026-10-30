@@ -210,12 +210,16 @@ its own wherever it can:
   started with `NtCreateThreadEx` (`THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER`).
   The stub ends in `ret` either way, which is why one build serves both paths.
 
-The payload is written into a `PAGE_READWRITE` image, gets its `MZ` and `PE\0\0`
-signatures zeroed, then each section is protected according to its flags (`.text`
-= `RX`, `.data` = `RW`, never a blanket `RWX`). Imports are rebased onto the
-target's module bases; API sets such as `api-ms-win-crt-*.dll` are resolved to
-the real DLL the target knows, and modules the target does not have are loaded
-there through a remote `LoadLibraryA`.
+The image and the startup stub are mapped out of a pagefile-backed section
+(`NtCreateSection` + `NtMapViewOfSection`, falling back to `VirtualAllocEx`), so
+they show up as `MEM_MAPPED` instead of private allocations. A view has to be
+created executable or the per-section `VirtualProtectEx` is refused, so it is
+dropped to `PAGE_READWRITE` right after mapping and each section gets its real
+protection once the bytes are in place (`.text` = `RX`, `.data` = `RW`).
+`MZ` and `PE\0\0` are then zeroed. Imports are rebased onto the target's module
+bases; API sets such as `api-ms-win-crt-*.dll` are resolved to the real DLL the
+target knows, and modules the target does not have are loaded there through a
+remote `LoadLibraryA`.
 
 ## First run, step by step
 
@@ -283,8 +287,10 @@ gone.
    the service entry.
 5. TLS callbacks are executed, but `AddressOfIndex` is not set up, so a payload
    that uses `__declspec(thread)` variables still breaks.
-6. The `VirtualAllocEx` / `WriteProcessMemory` pair is still visible to a kernel
-   anti-cheat; the handle filter only covers read access to the protected PID.
+6. The image is section-backed, but `WriteProcessMemory` is still how the bytes
+   get in, and the loader's `OpenProcess(PROCESS_ALL_ACCESS)` is still a handle a
+   kernel anti-cheat can see. `SEC_IMAGE` is not used, so the target's loader
+   lists never learn about the module.
 7. `ActiveProcessLinks` is detected from the running build, but the probe only
    knows the offsets listed at the top of `Driver.c`; a new Windows layout needs
    one more entry there.

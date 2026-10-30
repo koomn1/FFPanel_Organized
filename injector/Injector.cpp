@@ -20,6 +20,62 @@ static bool readRemote(HANDLE hProc, uintptr_t addr, void* out, size_t size) {
     return ReadProcessMemory(hProc, (LPCVOID)addr, out, size, &got) && got == size;
 }
 
+// ---------------------------------------------------------------------------
+// Image memory: a pagefile-backed section instead of VirtualAllocEx
+// ---------------------------------------------------------------------------
+
+typedef LONG(NTAPI* NtCreateSection_t)(PHANDLE, ACCESS_MASK, PVOID, PLARGE_INTEGER, ULONG, ULONG, HANDLE);
+typedef LONG(NTAPI* NtMapViewOfSection_t)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER,
+                                          PSIZE_T, ULONG, ULONG, ULONG);
+typedef LONG(NTAPI* NtUnmapViewOfSection_t)(HANDLE, PVOID);
+
+static bool mapImageSection(HANDLE hProc, size_t imageSize, void** out) {
+    static NtCreateSection_t createSection = (NtCreateSection_t)
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtCreateSection");
+    static NtMapViewOfSection_t mapView = (NtMapViewOfSection_t)
+        GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtMapViewOfSection");
+    if (!createSection || !mapView) return false;
+
+    const ACCESS_MASK kSectionAllAccess = 0xF001F;
+    const ULONG kSecCommit = 0x08000000;
+    const ULONG kViewUnmap = 2;
+
+    HANDLE section = nullptr;
+    LARGE_INTEGER size{};
+    size.QuadPart = (LONGLONG)((imageSize + 0xFFF) & ~(size_t)0xFFF);
+
+    if (createSection(&section, kSectionAllAccess, nullptr, &size,
+                      PAGE_EXECUTE_READWRITE, kSecCommit, nullptr) != 0) {
+        return false;
+    }
+
+    PVOID view = nullptr;
+    SIZE_T viewSize = 0;
+    const LONG status = mapView(section, hProc, &view, 0, 0, nullptr, &viewSize,
+                                kViewUnmap, 0, PAGE_EXECUTE_READWRITE);
+    CloseHandle(section); // the view stays mapped after the handle is closed
+    if (status != 0 || !view) return false;
+
+    // A view created without execute cannot be given execute later, so it is
+    // mapped RWX and dropped to RW immediately; sections get their real
+    // protection once the image has been written.
+    DWORD previous = 0;
+    VirtualProtectEx(hProc, view, (SIZE_T)size.QuadPart, PAGE_READWRITE, &previous);
+
+    *out = view;
+    return true;
+}
+
+static void unmapImage(HANDLE hProc, void* base, bool asSection) {
+    if (!base) return;
+    if (asSection) {
+        static NtUnmapViewOfSection_t unmapView = (NtUnmapViewOfSection_t)
+            GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtUnmapViewOfSection");
+        if (unmapView && unmapView(hProc, base) == 0) return;
+    }
+    VirtualFreeEx(hProc, base, 0, MEM_RELEASE);
+}
+
 typedef LONG(NTAPI* NtCreateThreadEx_t)(PHANDLE, ACCESS_MASK, PVOID, HANDLE, PVOID, PVOID,
                                         ULONG, SIZE_T, SIZE_T, SIZE_T, PVOID);
 
@@ -531,8 +587,15 @@ bool ManualMap(HANDLE hProc, DWORD pid, const std::vector<uint8_t>& dllBytes) {
                section->SizeOfRawData);
     }
 
-    void* remoteBase = VirtualAllocEx(hProc, nullptr, imageSize,
-                                       MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    // Prefer a pagefile-backed section: the image then shows up as MEM_MAPPED
+    // instead of a private allocation from VirtualAllocEx.
+    void* remoteBase = nullptr;
+    bool mappedAsSection = mapImageSection(hProc, imageSize, &remoteBase);
+    if (!remoteBase) {
+        mappedAsSection = false;
+        remoteBase = VirtualAllocEx(hProc, nullptr, imageSize,
+                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    }
     if (!remoteBase) return false;
 
     const uintptr_t preferred = (uintptr_t)nt->OptionalHeader.ImageBase;
@@ -541,7 +604,7 @@ bool ManualMap(HANDLE hProc, DWORD pid, const std::vector<uint8_t>& dllBytes) {
         !writeRemote(hProc, remoteBase, local.data(), imageSize) ||
         !wipeSignatures(hProc, (uintptr_t)remoteBase, (uintptr_t)dos->e_lfanew) ||
         !protectImage(hProc, (uintptr_t)remoteBase, nt)) {
-        VirtualFreeEx(hProc, remoteBase, 0, MEM_RELEASE);
+        unmapImage(hProc, remoteBase, mappedAsSection);
         return false;
     }
 
@@ -550,10 +613,13 @@ bool ManualMap(HANDLE hProc, DWORD pid, const std::vector<uint8_t>& dllBytes) {
 
     const std::vector<uint8_t> program = stub::emitProgram((uintptr_t)remoteBase, entry, tlsArray);
 
-    void* stubMemory = VirtualAllocEx(hProc, nullptr, stub::kSize,
-                                      MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    void* stubMemory = nullptr;
+    if (!mapImageSection(hProc, stub::kSize, &stubMemory)) {
+        stubMemory = VirtualAllocEx(hProc, nullptr, stub::kSize,
+                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    }
     if (!stubMemory) {
-        VirtualFreeEx(hProc, remoteBase, 0, MEM_RELEASE);
+        unmapImage(hProc, remoteBase, mappedAsSection);
         return false;
     }
 
@@ -578,7 +644,7 @@ bool ManualMap(HANDLE hProc, DWORD pid, const std::vector<uint8_t>& dllBytes) {
 
     if (!ok || !launched) {
         if (ok) VirtualFreeEx(hProc, stubMemory, 0, MEM_RELEASE);
-        VirtualFreeEx(hProc, remoteBase, 0, MEM_RELEASE);
+        unmapImage(hProc, remoteBase, mappedAsSection);
         return false;
     }
 
